@@ -443,7 +443,7 @@ addEventListener('pagehide',()=>sync(true));
  }else{
   if(!ident.name){ident.name=cleanName(ST.name||'')||await askName();ST.name=ident.name;store()}
  }
- if(ST.sess&&ST.sess.id===ident.id&&Date.now()-ST.sess.at<MAXAGE&&Array.isArray(ST.sess.seeds)){sess=ST.sess;if(sess.log.length)setTimeout(()=>sync(),2000)}
+ if(ST.sess&&ST.sess.id===ident.id&&Date.now()-ST.sess.at<MAXAGE&&Array.isArray(ST.sess.seeds)&&Array.isArray(ST.sess.log)&&ST.sess.log.length){sess=ST.sess;if(sess.log.length)setTimeout(()=>sync(),2000)}
  else{ST.sess=null;store();await startSession()}
  setInterval(()=>{if(pendingRec)applyRec(pendingRec)},1500);
 })();
