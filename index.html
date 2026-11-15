@@ -3,7 +3,7 @@
 <title>VoetbalBE Shoot-out</title>
 <style>html,body{margin:0;height:100%;background:#0b0d12;overflow:hidden}
 body{display:flex;flex-direction:column}#spelvak{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center}
-canvas{display:block;touch-action:none;-webkit-user-select:none;user-select:none;border-radius:6px}
+canvas{display:block;touch-action:pan-y;-webkit-user-select:none;user-select:none;border-radius:6px}
 #vbbanner{flex:0 0 52px;height:52px;font-family:Roboto,system-ui,Arial,sans-serif}
 .vbb-in{position:relative;display:flex;align-items:center;gap:8px;height:52px;padding:0 8px 0 10px;box-sizing:border-box;text-decoration:none;overflow:hidden;background:linear-gradient(135deg,#f4fbf4 0%,#e8f5e8 100%);border-left:4px solid #1b941b}
 .vbb-ico{flex:0 0 26px;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #cfe6cf;box-sizing:border-box}
@@ -301,6 +301,15 @@ cv.addEventListener('pointerdown',e=>{
  if(G.state==='idle'){const b=P(G.xs,BR,0);if(Math.hypot(p.x-b.x,p.y-b.y)<70){G.state='aim';G.drag=p;G.tPress=G.time;G.power=0;try{cv.setPointerCapture(e.pointerId)}catch(_){}}}
 });
 cv.addEventListener('pointermove',e=>{if(G.state==='aim')G.drag=pt(e);});
+// Scrollen op gsm: het canvas laat verticaal scrollen toe (touch-action: pan-y), behalve een vierkant rond de bal
+// (dezelfde 70 eenheden als waarbinnen mikken begint) en een sleep die al als mikken begonnen is.
+cv.addEventListener('touchstart',e=>{
+ if(G.state==='aim'){e.preventDefault();return}
+ if(G.state!=='idle')return;
+ const t=e.touches[0];if(!t)return;
+ const p=pt(t),b=P(G.xs,BR,0);
+ if(Math.abs(p.x-b.x)<70&&Math.abs(p.y-b.y)<70)e.preventDefault();
+},{passive:false});
 cv.addEventListener('pointerup',()=>{
  if(G.state!=='aim')return;
  const bp=P(G.xs,BR,0),d=G.drag||bp,dy=d.y-bp.y,len=Math.hypot(d.x-bp.x,dy);
