@@ -1,0 +1,50 @@
+name: Levelmeting
+on:
+  push:
+    branches: [meting]
+permissions:
+  contents: write
+concurrency:
+  group: levelmeting
+  cancel-in-progress: false
+jobs:
+  meet:
+    if: contains(github.event.head_commit.message, '[meet]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        deel: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Meet deel ${{ matrix.deel }}
+        run: node meting/meet4.js deel ${{ matrix.deel }} 20
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deel-${{ matrix.deel }}
+          path: meting/uit/deel-${{ matrix.deel }}.jsonl
+  samen:
+    needs: meet
+    if: always() && contains(github.event.head_commit.message, '[meet]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: delen
+          pattern: deel-*
+          merge-multiple: true
+      - name: Resultaten samenvoegen en bewaren
+        run: |
+          mkdir -p meting/uit
+          cat delen/*.jsonl > meting/uit/pool4_resultaat.jsonl
+          wc -l meting/uit/pool4_resultaat.jsonl
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add meting/uit/pool4_resultaat.jsonl
+          git commit -m "Meetresultaten levelpool"
+          git push
