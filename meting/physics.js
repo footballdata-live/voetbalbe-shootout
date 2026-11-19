@@ -57,6 +57,7 @@ const ACC_A=1.5,ACC_H=.10; // afwijking bij volle kracht: 1,5 graad richting, 0,
 const NORMAAL=0,PLAT=1,LOB=2;
 const EFF_MAX=8,    // bocht bij de fader helemaal opzij (m/s2 zijwaarts)
  EFF_SIG=1.2,       // afwijking op die bocht bij de fader helemaal opzij (m/s2, 1 sigma); groeit lineair met de faderuitslag => ca. 15% van de bocht
+ EFF_D0=16,         // boven deze afstand (m) krimpt de effectafwijking met D0/D: de misser groeit dan evenredig met de afstand i.p.v. kwadratisch
  LOB_K=.25,         // een lob krijgt maar een kwart van de bocht; de afwijking blijft die van de volle faderuitslag
  LOB_TH0=30,LOB_TH1=60, // lob: hoe verder je trekt, hoe hoger de boog (vertrekhoek 30 tot 60 graden)
  LOB_V0=8,LOB_V1=20,  // lob: de kracht bepaalt hoe ver de bal gaat (8 tot 20 m/s); te veel = over de lat, te weinig = te kort
@@ -86,11 +87,12 @@ function create(sc,aim,power,curl,rng,keeperX0,soort){
  const D=sc.D,xs=sc.xs||0,wind=sc.wind||0,ac=Math.abs(curl);
  let gx=aim.gx,gy=aim.gy;
  if(sc.acc){const p2=power*power,ph=Math.atan(gx*GW/D)+gauss(rng)*sc.acc*ACC_A*p2*Math.PI/180;gx=D*Math.tan(ph)/GW;gy+=gauss(rng)*sc.acc*ACC_H*p2;}
- const x1=xs+gx*GW,c=EFF_MAX*curl*(soort===LOB?LOB_K:1),dc=ac?gauss(rng)*EFF_SIG*ac:0; // dc = afwijking door effect (enkel als de fader niet in het midden staat)
+ // x1 = waar de bal zonder effect zou uitkomen: de sleep bepaalt de vertrekrichting, het effect buigt de bal daarvan weg
+ const x1=xs+gx*GW,c=EFF_MAX*curl*(soort===LOB?LOB_K:1),dc=ac?gauss(rng)*EFF_SIG*ac*Math.min(1,EFF_D0/D):0; // dc = afwijking door effect (enkel als de fader niet in het midden staat)
  const kz=sc.kz||KZ,zk=D-kz;let v,vz,T,vx,vy,y1,tW,xr,xk,yk,terug=null,tc=null; // xk,yk = waar de bal het vlak van de keeper kruist (dat leest de keeper)
  if(soort===PLAT){
   v=lerp(12,27,power);vy=Math.sqrt(2*GR*PLAT_H);
-  const P=platBaan(D,v,vy,zk);vx=(x1-xs-P.Bc*c)/P.A;T=P.T;tW=P.tW;y1=P.y;xr=x1+P.Bc*dc+P.Bw*wind; // hoogte uit de trek telt niet: altijd laag
+  const P=platBaan(D,v,vy,zk);vx=(x1-xs)/P.A;T=P.T;tW=P.tW;y1=P.y;xr=x1+P.Bc*(c+dc)+P.Bw*wind; // hoogte uit de trek telt niet: altijd laag
   xk=xs+P.k.A*vx+P.k.Bc*(c+dc)+P.k.Bw*wind;yk=P.k.y;vz=v;
  }else if(soort===LOB){
   // richting zoals altijd; hoogte van de boog uit de trek, afstand uit de kracht: waar de bal de lijn kruist hangt af van de dosering
@@ -100,11 +102,11 @@ function create(sc,aim,power,curl,rng,keeperX0,soort){
   if(kz>KZ)terug={z0:zk,z1:D-KZ,t0,v:KEEPER_TERUG};
   const zkF=terug?t=>Math.min(terug.z1,terug.z0+terug.v*Math.max(0,t-terug.t0)):()=>zk;
   const B=baan(D,vz,vy,zkF); // droog parcours: een lob die te kort valt, botst; de keeper leest ook dat
-  vx=(x1-xs-B.Bc*c)/B.A;T=B.T;tW=B.tW;y1=B.y;xr=x1+B.Bc*dc+B.Bw*wind;tc=B.k.t;
+  vx=(x1-xs)/B.A;T=B.T;tW=B.tW;y1=B.y;xr=x1+B.Bc*(c+dc)+B.Bw*wind;tc=B.k.t;
   xk=xs+B.k.A*vx+B.k.Bc*(c+dc)+B.k.Bw*wind;yk=B.k.y;
  }else{
   v=lerp(12,27,power);vz=v;T=D/v;
-  y1=Math.max(BR,gy*GH);vx=(x1-xs-.5*c*T*T)/T;vy=(y1-BR+.5*GR*T*T)/T;tW=WZ/D*T;xr=x1+.5*(dc+wind)*T*T;
+  y1=Math.max(BR,gy*GH);vx=(x1-xs)/T;vy=(y1-BR+.5*GR*T*T)/T;tW=WZ/D*T;xr=x1+.5*(c+dc+wind)*T*T;
   const tk=zk/v;xk=xs+vx*tk+.5*(c+dc+wind)*tk*tk;yk=BR+vy*tk-.5*GR*tk*tk;
  }
  const K=planKeeper(soort===LOB?{...sc,kp:{...sc.kp,skill:1}}:sc,xk,yk,keeperStart(sc,keeperX0),rng,T,tW); // een lob ziet hij komen: geen gok, hij leest de bal
@@ -156,6 +158,6 @@ function step(S,dt){
   else if(S.t>7){S.result='nogoal';S.cause='tijd';S.tDecided=S.t}
  }
 }
-return{baan,NORMAAL,PLAT,LOB,EFF_MAX,EFF_SIG,LOB_K,LOB_TH0,LOB_TH1,LOB_V0,LOB_V1,KEEPER_TERUG,PLAT_H,platBaan,keeperStart,extraCaps,lieCap,ACC_A,ACC_H,BR,GW,GH,KZ,WZ,WOFF,seeded,create,step,keeperCaps,wallCaps,frameCaps,closest,keeperPose,clamp,lerp};
+return{baan,NORMAAL,PLAT,LOB,EFF_MAX,EFF_SIG,EFF_D0,LOB_K,LOB_TH0,LOB_TH1,LOB_V0,LOB_V1,KEEPER_TERUG,PLAT_H,platBaan,keeperStart,extraCaps,lieCap,ACC_A,ACC_H,BR,GW,GH,KZ,WZ,WOFF,seeded,create,step,keeperCaps,wallCaps,frameCaps,closest,keeperPose,clamp,lerp};
 })();
 if(typeof module!=='undefined')module.exports=Phys;

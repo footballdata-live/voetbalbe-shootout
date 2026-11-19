@@ -40,10 +40,23 @@ if (!isMainThread) {
   const OPTIES = [[0, P.NORMAAL], [-1, P.NORMAAL], [-.5, P.NORMAAL], [.5, P.NORMAAL], [1, P.NORMAAL], [0, P.PLAT], [.5, P.PLAT], [-.5, P.PLAT], [0, P.LOB], [.5, P.LOB], [-.5, P.LOB]];
   const SOORT = ['normaal', 'plat', 'lob'];
   if (process.env.ENKEL) { const want = process.env.ENKEL.split(','); for (let i = OPTIES.length - 1; i >= 0; i--) if (!want.includes(SOORT[OPTIES[i][1]] + ':' + OPTIES[i][0])) OPTIES.splice(i, 1); } // bv. ENKEL=lob:0 of normaal:0,normaal:-1
-  function phiGrid(c) {
-    const D = c.D, xs = c.xs || 0, deg = a => a * 180 / Math.PI, L = deg(Math.atan((-GW - xs) / D)), R = deg(Math.atan((GW - xs) / D));
+  // bocht (m, zijwaarts op de doellijn) van deze optie over alle krachten (en hoogtes bij een lob). Sinds 19/11 is de sleep
+  // de vertrekrichting: het rooster moet dus ook vertrekrichtingen naast het doel bevatten die met effect binnendraaien.
+  function bochtBereik(D, curl, soort) {
+    let lo = 0, hi = 0; if (!curl) return [lo, hi]; const zet = b => { lo = Math.min(lo, b); hi = Math.max(hi, b); };
+    for (const p of PW) {
+      if (soort === P.LOB) { for (const gy of GYall) { const th = P.lerp(P.LOB_TH0, P.LOB_TH1, Math.min(1, gy / 1.6)) * Math.PI / 180, v = P.lerp(P.LOB_V0, P.LOB_V1, p); zet(P.baan(D, v * Math.cos(th), v * Math.sin(th)).Bc * P.EFF_MAX * curl * P.LOB_K); } }
+      else if (soort === P.PLAT) zet(P.platBaan(D, P.lerp(12, 27, p), Math.sqrt(2 * 9.81 * P.PLAT_H)).Bc * P.EFF_MAX * curl);
+      else { const T = D / P.lerp(12, 27, p); zet(.5 * P.EFF_MAX * curl * T * T); }
+    }
+    return [lo, hi];
+  }
+  function phiGrid(c, curl, soort) {
+    const D = c.D, xs = c.xs || 0, deg = a => a * 180 / Math.PI, [blo, bhi] = bochtBereik(D, curl || 0, soort || 0);
+    const L = deg(Math.atan((-GW - bhi - xs) / D)), R = deg(Math.atan((GW - blo - xs) / D));
+    const psi = deg(Math.atan(-xs / D)), vrijL = Math.max(psi - 45, -68.7), vrijR = Math.min(psi + 45, 68.7); // wat de sleep in het spel kan bereiken
     const m = 3 + (c.wind ? deg(.5 * c.wind * Math.pow(D / 12, 2) / D) : 0), a = [];
-    for (let x = Math.floor((L - m) * 2) / 2; x <= Math.ceil((R + m) * 2) / 2 + .001; x += .5) a.push(+x.toFixed(2)); return a;
+    for (let x = Math.floor(Math.max(vrijL, L - m) * 2) / 2; x <= Math.ceil(Math.min(vrijR, R + m) * 2) / 2 + .001; x += .5) a.push(+x.toFixed(2)); return a;
   }
   const interp = (g, nj, pi, gi, wi) => {
     const cl = (v, n) => Math.max(0, Math.min(n - 1.000001, v)); pi = cl(pi, g.length); gi = nj > 1 ? cl(gi, nj) : 0; wi = cl(wi, PW.length);
@@ -52,7 +65,7 @@ if (!isMainThread) {
   };
   const scOf = c => ({ D: c.D, xs: c.xs || 0, wall: !!c.wall, wallJump: c.wall ? (c.wallJump === 0 ? 0 : 1) : undefined, wallLie: c.wall ? (c.wallLie ? 1 : 0) : 0, extras: c.extras || [], wind: c.wind || 0, acc: c.acc || 0, kPos: c.kPos || 0, kz: c.kz || .25, kp: kpOf(c.kq) });
   async function grof(c, curl, soort) {
-    const sc = scOf(c), PHI = phiGrid(c), GY = soort === P.PLAT ? [0] : GYall, nj = GY.length, nk = PW.length, pts = [], ids = [];
+    const sc = scOf(c), PHI = phiGrid(c, curl, soort), GY = soort === P.PLAT ? [0] : GYall, nj = GY.length, nk = PW.length, pts = [], ids = [];
     for (let i = 0; i < PHI.length; i += 2) for (let j = 0; j < nj; j += 2) for (let k = 0; k < nk; k += 2) { pts.push(PHI[i], GY[j], PW[k]); ids.push([i, j, k]); }
     const co = await calc(sc, curl, soort, pts, KG); let sum = 0; for (const v of co) sum += v;
     return { curl, soort, sc, PHI, GY, ids, co, sum };
